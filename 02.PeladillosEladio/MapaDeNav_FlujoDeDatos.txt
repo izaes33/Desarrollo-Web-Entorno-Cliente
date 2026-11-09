@@ -1,0 +1,147 @@
+--------------------------------------------------------
+ARQUITECTURA Y FLUJO DE DATOS EN LA APLICACION (APP.JS)
+--------------------------------------------------------
+
+Este documento detalla el ecosistema técnico completo de la aplicación "Peladillos Eladio", 
+explicando cómo se inicializan las variables, cómo se estructuran los datos (objetos frente a arrays) 
+y cómo se comunican todas las funciones mediante llamadas y paso de parámetros.
+
+
+--------------------------------------------------------
+1. EL MAPA DE VARIABLES GLOBALES Y ESTRUCTURAS DE DATOS
+--------------------------------------------------------
+
+Al inicio de la aplicación se definen las constantes globales que sirven como base de datos y referencias estáticas de la interfaz:
+
+    - TIENDA: Objeto literal que almacena configuraciones generales 
+            ({ nombre, divisa, idioma, edadMinima }). 
+        Permite acceso directo mediante punto (TIENDA.nombre).
+
+    - SERVICIOS: Array de objetos 
+            ([ { id: 'clasico', name: '...', precio: 12, duracion: 25 }, ... ]). 
+        Se usa una lista ordenada numerada porque la prioridad es recorrerla completa para 
+        mostrarla en pantalla (tarjetas o desplegables) mediante bucles o métodos como .find().
+
+    - EXTRAS: Objeto de objetos (diccionario clave-valor: 
+            { lavado: { nombre: '...', precio: 100 }, ... }). 
+        Se utiliza cuando se conoce la clave exacta (por ejemplo, el ID recogido de un checkbox) 
+        para acceder a los datos de forma instantánea sin necesidad de recorrer listas.
+
+    - Constantes de interfaz (Elementos del DOM):
+            * servicesGrid = document.querySelector('#servicesGrid');
+            * serviceSelect = document.querySelector('#serviceSelect');
+            * bookingForm = document.querySelector('#bookingForm');
+            * ticketContent = document.querySelector('#ticketContent');
+            * formMessage = document.querySelector('#formMessage');
+
+
+-------------------------------------------------------------
+2. EL CIRCUITO DE LLAMADAS Y FLUJO DE DATOS (EVENT LISTENERS)
+-------------------------------------------------------------
+
+La ejecución principal de la aplicación no se produce de forma lineal, sino a la 
+escucha de eventos de usuario (en este caso, el envío del formulario):
+
+bookingForm.addEventListener('submit', function(event) {
+    event.preventDefault(); // Evita que la página se recargue por defecto
+
+    // PASO A: Captura y normalización
+                const reserva = leerFormulario();
+
+    // PASO B: Validación de reglas de negocio
+                const errores = validarReserva(reserva);
+
+                if (errores.length > 0) {
+                    formMessage.textContent = errores.join(' ');
+                    return; // Frena la ejecución si hay fallos
+                }
+
+    // PASO C: Cálculo financiero
+                const resultado = calcularReserva(reserva);
+
+    // PASO D: Mensajería y renderizado visual
+                formMessage.textContent = `Reserva preparada para ${reserva.nombre}. Total: ${formatMoney(resultado.total)}.`;
+                renderizarTicket();
+                });
+
+// Carga inicial automática al abrir la web
+
+renderizarServicios();
+
+
+-------------------------------------------------------------
+3. DESGLOSE Y SECUENCIA DE CADA FUNCIÓN (CREACIÓN Y LLAMADA)
+-------------------------------------------------------------
+
+A. formatMoney(importe)
+
+- Creación de variables: Crea una instancia local de la API nativa de JavaScript:
+            const formatter = new Intl.NumberFormat(TIENDA.idioma, { style: 'currency', currency: TIENDA.divisa });
+
+- Método llamado: .format(importe).
+- Utilidad: Transforma un número puro en un texto monetario formateado (ej. 12 -> "12,00 €").
+
+
+B. escapeHtml(value)
+
+- Creación y llamadas: Aplica un flujo encadenado (method chaining) de sustituciones sobre una cadena de texto:
+            return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;')...;
+
+- Utilidad: Previene vulnerabilidades XSS convirtiendo caracteres especiales en entidades HTML seguras antes de inyectarlos en el DOM.
+
+
+C. buscarServicio(id) / comprobarServicio(id)
+
+- Llamada y métodos: Utiliza el método de arrays .find() junto con una función flecha:
+
+            return SERVICIOS.find(servicio => servicio.id === id);
+
+- Utilidad: Recorre el array SERVICIOS buscando el primer objeto que coincida con el ID proporcionado y lo devuelve completo.
+
+
+
+D. renderizarServicios() y renderizarServiciosCreate()
+
+- Creación de variables: Inicializa acumuladores como let cardsHtml = ''; y let optionHtml = ...; o nodos en memoria mediante document.createElement('article').
+
+- Métodos utilizados: Bucle for...of, .classList.add(), .append(), y asignación directa a .innerHTML o .textContent.
+
+- Utilidad: Construyen el catálogo visual y el desplegable de servicios en el DOM.
+
+
+
+E. leerFormulario()
+
+- Creación de variables: Captura los datos del formulario mediante la interfaz nativa const datos = new FormData(bookingForm); y declara variables procesadas (nombre, edad, extras, coupon, servicioId, dia, esMiembro).
+
+- Métodos utilizados: .get(), .getAll(), .trim(), .toUpperCase(), .map(String), Number().
+
+- Utilidad: Devuelve un objeto literal unificado y limpio con toda la información introducida por el usuario.
+
+
+
+F. validarReserva(reserva)
+
+- Creación de variables: Inicializa la cesta de fallos const errores = [];.
+
+- Métodos utilizados: .push() para acumular mensajes de error en función de múltiples condiciones evaluadas con if independientes (comprobando nulos, rangos numéricos con Number.isNaN(), existencia mediante buscarServicio(), etc.).
+
+- Utilidad: Devuelve un array con todos los errores detectados.
+
+
+
+G. calcularReserva(reserva)
+
+- Creación de variables: const servicio, let subtotal, const extrasDetalle = [], let porcentajeDescuento, descuento, total.
+
+- Métodos y llamadas: Llama a buscarServicio(), recorre reserva.extras mediante for...of extrayendo valores con notación de corchetes EXTRAS[extraID], y aplica .push() sobre extrasDetalle.
+
+- Utilidad: Retorna un nuevo objeto financiero completo (subtotal, descuentos, total, etc.) sin mutar los datos originales del sistema.
+
+
+
+H. renderizarTicket()
+
+- Creación de variables: const reserva = leerFormulario();, const resultado = calcularReserva(reserva);, const nombreServicio, const nombresExtras.
+
+- Métodos y llamadas: Llama a las funciones anteriores, encadena .map() y .join(', ') para los extras, y utiliza template literals (`...`) combinados con escapeHtml() y formatMoney() para volcar la información estructurada en ticketContent.innerHTML.
